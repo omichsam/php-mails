@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace PhpMails;
 
 use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\SMTP;
 use PHPMailer\PHPMailer\Exception;
 
 /**
@@ -199,7 +198,7 @@ class Mail
      * @param int $level Debug level (0 = off, 1 = client, 2 = client and server)
      * @return self
      */
-    public function enableDebug(int $level = SMTP::DEBUG_SERVER): self
+    public function enableDebug(int $level = 2): self
     {
         $this->mailer->SMTPDebug = $level;
         return $this;
