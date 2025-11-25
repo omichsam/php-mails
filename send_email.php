@@ -1,63 +1,93 @@
 <?php
-use PHPMailer\PHPMailer\PHPMailer;
-use PHPMailer\PHPMailer\Exception;
+// Include required files
+require_once 'includes/autoload.php';
 
-require 'vendor/PHPMailer/src/Exception.php';
-require 'vendor/PHPMailer/src/PHPMailer.php';
-require 'vendor/PHPMailer/src/SMTP.php';
-
+// Start session for flash messages and CSRF protection
 session_start();
 
-if(isset($_POST['send'])){
+// Set security headers
+header('X-Content-Type-Options: nosniff');
+header('X-Frame-Options: DENY');
+header('X-XSS-Protection: 1; mode=block');
 
-    $email = $_POST['email'];
-    $subject = $_POST['subject'];
-    $message = $_POST['message'];
-
-   
-    //Load composer's autoloader
-
-    $mail = new PHPMailer(true);                            
-    try {
-        //Server settings
-        $mail->isSMTP();                                     
-        $mail->Host = 'smtp.gmail.com';                      
-        $mail->SMTPAuth = true;                             
-        $mail->Username = 'sourcecod404@gmail.com';     
-        $mail->Password = 'mypassword';             
-        $mail->SMTPOptions = array(
-            'ssl' => array(
-            'verify_peer' => false,
-            'verify_peer_name' => false,
-            'allow_self_signed' => true
-            )
-        );                         
-        $mail->SMTPSecure = 'ssl';                           
-        $mail->Port = 465;                                   
-
-        //Send Email
-        $mail->setFrom('sourcecod404@gmail.com');
-        
-        //Recipients
-        $mail->addAddress($email);              
-        $mail->addReplyTo('sourcecod404@gmail.com');
-        
-        //Content
-        $mail->isHTML(true);                                  
-        $mail->Subject = $subject;
-        $mail->Body    = $message;
-
-        $mail->send();
-		
-       $_SESSION['result'] = 'Message has been sent';
-	   $_SESSION['status'] = 'ok';
-    } catch (Exception $e) {
-	   $_SESSION['result'] = 'Message could not be sent. Mailer Error: '.$mail->ErrorInfo;
-	   $_SESSION['status'] = 'error';
+// CSRF Token Generation
+function generateCsrfToken() {
+    if (empty($_SESSION['csrf_token'])) {
+        $_SESSION['csrf_token'] = bin2hex(random_bytes(32));
     }
-	
-	header("location: index.php");
-
+    return $_SESSION['csrf_token'];
 }
 
+// Handle form submission
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['send'])) {
+    
+    // Validate CSRF token
+    if (!isset($_POST['csrf_token']) || $_POST['csrf_token'] !== $_SESSION['csrf_token']) {
+        $_SESSION['flash'] = [
+            'type' => 'error',
+            'message' => 'Security token validation failed. Please try again.'
+        ];
+        header('Location: index.php');
+        exit;
+    }
+    
+    // Validate and sanitize inputs
+    $email = filter_var($_POST['email'], FILTER_SANITIZE_EMAIL);
+    $subject = trim($_POST['subject']);
+    $message = trim($_POST['message']);
+    $isHtml = isset($_POST['is_html']) ? true : false;
+    
+    // Basic validation
+    $errors = [];
+    
+    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+        $errors[] = 'Please enter a valid email address.';
+    }
+    
+    if (empty($subject)) {
+        $errors[] = 'Please enter a subject.';
+    }
+    
+    if (empty($message)) {
+        $errors[] = 'Please enter a message.';
+    }
+    
+    if (!empty($errors)) {
+        $_SESSION['flash'] = [
+            'type' => 'error',
+            'message' => implode('<br>', $errors)
+        ];
+        header('Location: index.php');
+        exit;
+    }
+    
+    try {
+        // Initialize mail sender
+        $mailSender = new MailSender();
+        
+        // Send email
+        $result = $mailSender->send($email, $subject, $message, $isHtml);
+        
+        if ($result) {
+            $_SESSION['flash'] = [
+                'type' => 'success',
+                'message' => 'Email sent successfully!'
+            ];
+        }
+        
+    } catch (Exception $e) {
+        $_SESSION['flash'] = [
+            'type' => 'error',
+            'message' => 'Failed to send email: ' . $e->getMessage()
+        ];
+    }
+    
+    // Redirect back to form
+    header('Location: index.php');
+    exit;
+}
 
+// If not POST request, redirect to form
+header('Location: index.php');
+exit;
+?>
